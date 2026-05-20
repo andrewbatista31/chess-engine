@@ -17,6 +17,7 @@ pub fn pseudo_legal_moves(pos: &Position) -> MoveList {
     gen_piece_moves(pos, us, PieceKind::Rook, our_pieces, their_pieces, occ, &mut out, rook_attacks);
     gen_piece_moves(pos, us, PieceKind::Queen, our_pieces, their_pieces, occ, &mut out, queen_attacks);
     gen_piece_moves(pos, us, PieceKind::King, our_pieces, their_pieces, occ, &mut out, king_attacks_wrap);
+    gen_castling(pos, us, occ, &mut out);
 
     out
 }
@@ -131,6 +132,39 @@ fn gen_pawn_moves(
                 }
             }
         }
+
+        // en passant
+        if let Some(ep_sq) = pos.en_passant {
+            let ep_f = ep_sq.file() as i32;
+            let ep_r = ep_sq.rank() as i32;
+            if ep_r == nr && (ep_f - f).abs() == 1 {
+                out.push(Move::new(from, ep_sq, MoveFlag::EnPassant));
+            }
+        }
+    }
+}
+
+fn gen_castling(pos: &Position, us: Color, occ: Bitboard, out: &mut MoveList) {
+    use crate::types::{File, Rank};
+    let (ks_right, qs_right, rank) = match us {
+        Color::White => (pos.castling.white_king_side, pos.castling.white_queen_side, Rank::One),
+        Color::Black => (pos.castling.black_king_side, pos.castling.black_queen_side, Rank::Eight),
+    };
+    let e = Square::new(File::E, rank);
+    if ks_right {
+        let f = Square::new(File::F, rank);
+        let g = Square::new(File::G, rank);
+        if !occ.contains(f) && !occ.contains(g) {
+            out.push(Move::new(e, g, MoveFlag::KingCastle));
+        }
+    }
+    if qs_right {
+        let b = Square::new(File::B, rank);
+        let c = Square::new(File::C, rank);
+        let d = Square::new(File::D, rank);
+        if !occ.contains(b) && !occ.contains(c) && !occ.contains(d) {
+            out.push(Move::new(e, c, MoveFlag::QueenCastle));
+        }
     }
 }
 
@@ -151,5 +185,26 @@ mod tests {
         let mut pos = Position::starting();
         pos.side_to_move = crate::types::Color::Black;
         assert_eq!(pseudo_legal_moves(&pos).len(), 20);
+    }
+
+    #[test]
+    fn castling_when_clear() {
+        let fen = "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1";
+        let pos = crate::fen::parse_fen(fen).unwrap();
+        let moves = pseudo_legal_moves(&pos);
+        let castles: Vec<_> = moves.into_iter()
+            .filter(|m| matches!(m.flag(), crate::moves::MoveFlag::KingCastle | crate::moves::MoveFlag::QueenCastle))
+            .collect();
+        assert_eq!(castles.len(), 2);
+    }
+
+    #[test]
+    fn en_passant_square_produces_capture() {
+        let fen = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
+        let pos = crate::fen::parse_fen(fen).unwrap();
+        let ep_moves: Vec<_> = pseudo_legal_moves(&pos).into_iter()
+            .filter(|m| m.flag() == crate::moves::MoveFlag::EnPassant)
+            .collect();
+        assert_eq!(ep_moves.len(), 1);
     }
 }
