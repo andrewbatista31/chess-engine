@@ -42,18 +42,8 @@ impl Position {
     }
 
     pub fn starting() -> Self {
-        let mut p = Self::empty();
-        use crate::types::{File, PieceKind::*, Rank};
-        let back_rank = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook];
-        for (i, kind) in back_rank.iter().enumerate() {
-            let file = File::from_index(i as u8).unwrap();
-            p.set_piece(Square::new(file, Rank::One),   Piece { color: Color::White, kind: *kind });
-            p.set_piece(Square::new(file, Rank::Eight), Piece { color: Color::Black, kind: *kind });
-            p.set_piece(Square::new(file, Rank::Two),   Piece { color: Color::White, kind: Pawn });
-            p.set_piece(Square::new(file, Rank::Seven), Piece { color: Color::Black, kind: Pawn });
-        }
-        p.castling = CastlingRights::ALL;
-        p
+        crate::fen::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+            .expect("starting FEN is valid")
     }
 
     pub fn set_piece(&mut self, sq: Square, piece: Piece) {
