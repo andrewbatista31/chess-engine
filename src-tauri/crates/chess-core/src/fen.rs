@@ -90,6 +90,74 @@ fn parse_square(s: &str) -> Result<Square, FenError> {
     Ok(Square::new(file, rank))
 }
 
+pub fn serialize_fen(pos: &Position) -> String {
+    let mut out = String::with_capacity(80);
+
+    for rank_idx in (0..8u8).rev() {
+        let mut empty = 0;
+        for file_idx in 0..8u8 {
+            let sq = Square::new(
+                File::from_index(file_idx).unwrap(),
+                Rank::from_index(rank_idx).unwrap(),
+            );
+            match pos.piece_at(sq) {
+                None => empty += 1,
+                Some(p) => {
+                    if empty > 0 {
+                        out.push(char::from_digit(empty, 10).unwrap());
+                        empty = 0;
+                    }
+                    out.push(piece_char(p));
+                }
+            }
+        }
+        if empty > 0 { out.push(char::from_digit(empty, 10).unwrap()); }
+        if rank_idx > 0 { out.push('/'); }
+    }
+
+    out.push(' ');
+    out.push(if pos.side_to_move == Color::White { 'w' } else { 'b' });
+
+    out.push(' ');
+    let c = pos.castling;
+    if !(c.white_king_side || c.white_queen_side || c.black_king_side || c.black_queen_side) {
+        out.push('-');
+    } else {
+        if c.white_king_side  { out.push('K'); }
+        if c.white_queen_side { out.push('Q'); }
+        if c.black_king_side  { out.push('k'); }
+        if c.black_queen_side { out.push('q'); }
+    }
+
+    out.push(' ');
+    match pos.en_passant {
+        None => out.push('-'),
+        Some(sq) => out.push_str(&square_to_str(sq)),
+    }
+
+    out.push(' ');
+    out.push_str(&pos.halfmove_clock.to_string());
+    out.push(' ');
+    out.push_str(&pos.fullmove_number.to_string());
+
+    out
+}
+
+fn piece_char(p: Piece) -> char {
+    let c = match p.kind {
+        PieceKind::Pawn=>'p', PieceKind::Knight=>'n', PieceKind::Bishop=>'b',
+        PieceKind::Rook=>'r', PieceKind::Queen=>'q',  PieceKind::King=>'k',
+    };
+    if p.color == Color::White { c.to_ascii_uppercase() } else { c }
+}
+
+fn square_to_str(sq: Square) -> String {
+    let mut s = String::with_capacity(2);
+    s.push((b'a' + sq.file() as u8) as char);
+    s.push((b'1' + sq.rank() as u8) as char);
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +187,19 @@ mod tests {
     fn rejects_malformed() {
         assert!(parse_fen("not a fen").is_err());
         assert!(parse_fen("8/8/8/8/8/8/8/8 w - - 0 1").is_ok()); // empty board OK
+    }
+
+    #[test]
+    fn fen_round_trip() {
+        let fens = [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+            "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        ];
+        for fen in fens {
+            let pos = parse_fen(fen).unwrap();
+            assert_eq!(serialize_fen(&pos), fen, "round trip failed for {fen}");
+        }
     }
 }

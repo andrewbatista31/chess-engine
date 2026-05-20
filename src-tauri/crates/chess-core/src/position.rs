@@ -75,6 +75,10 @@ impl Position {
     pub fn all_pieces(&self) -> Bitboard {
         self.occupied_by(Color::White) | self.occupied_by(Color::Black)
     }
+
+    pub fn to_fen(&self) -> String {
+        crate::fen::serialize_fen(self)
+    }
 }
 
 #[cfg(test)]
