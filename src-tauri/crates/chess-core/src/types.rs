@@ -37,21 +37,21 @@ impl Square {
     pub fn index(self) -> u8 { self.0 }
     pub fn file(self) -> File {
         // SAFETY: 0..64 guarantees file 0..8
-        unsafe { std::mem::transmute(self.0 % 8) }
+        unsafe { std::mem::transmute::<u8, File>(self.0 % 8) }
     }
     pub fn rank(self) -> Rank {
-        unsafe { std::mem::transmute(self.0 / 8) }
+        unsafe { std::mem::transmute::<u8, Rank>(self.0 / 8) }
     }
 }
 
 impl File {
     pub fn from_index(i: u8) -> Option<Self> {
-        if i < 8 { Some(unsafe { std::mem::transmute(i) }) } else { None }
+        if i < 8 { Some(unsafe { std::mem::transmute::<u8, File>(i) }) } else { None }
     }
 }
 impl Rank {
     pub fn from_index(i: u8) -> Option<Self> {
-        if i < 8 { Some(unsafe { std::mem::transmute(i) }) } else { None }
+        if i < 8 { Some(unsafe { std::mem::transmute::<u8, Rank>(i) }) } else { None }
     }
 }
 
