@@ -1,0 +1,155 @@
+use crate::attacks::*;
+use crate::bitboard::Bitboard;
+use crate::moves::{Move, MoveFlag, MoveList};
+use crate::position::Position;
+use crate::types::{Color, PieceKind, Square};
+
+pub fn pseudo_legal_moves(pos: &Position) -> MoveList {
+    let mut out = MoveList::new();
+    let us = pos.side_to_move;
+    let our_pieces = pos.occupied_by(us);
+    let their_pieces = pos.occupied_by(us.flip());
+    let occ = our_pieces | their_pieces;
+
+    gen_pawn_moves(pos, us, occ, their_pieces, &mut out);
+    gen_piece_moves(pos, us, PieceKind::Knight, our_pieces, their_pieces, occ, &mut out, knight_attacks_wrap);
+    gen_piece_moves(pos, us, PieceKind::Bishop, our_pieces, their_pieces, occ, &mut out, bishop_attacks);
+    gen_piece_moves(pos, us, PieceKind::Rook, our_pieces, their_pieces, occ, &mut out, rook_attacks);
+    gen_piece_moves(pos, us, PieceKind::Queen, our_pieces, their_pieces, occ, &mut out, queen_attacks);
+    gen_piece_moves(pos, us, PieceKind::King, our_pieces, their_pieces, occ, &mut out, king_attacks_wrap);
+
+    out
+}
+
+fn knight_attacks_wrap(sq: Square, _o: Bitboard) -> Bitboard {
+    knight_attacks(sq)
+}
+fn king_attacks_wrap(sq: Square, _o: Bitboard) -> Bitboard {
+    king_attacks(sq)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn gen_piece_moves<F>(
+    pos: &Position,
+    us: Color,
+    kind: PieceKind,
+    our_pieces: Bitboard,
+    their_pieces: Bitboard,
+    occ: Bitboard,
+    out: &mut MoveList,
+    attacks_fn: F,
+) where
+    F: Fn(Square, Bitboard) -> Bitboard,
+{
+    let mut bb = pos.bitboards[us.index()][kind as usize];
+    while let Some(from) = bb.pop_lsb() {
+        let mut targets = attacks_fn(from, occ) & !our_pieces;
+        while let Some(to) = targets.pop_lsb() {
+            let flag = if their_pieces.contains(to) {
+                MoveFlag::Capture
+            } else {
+                MoveFlag::Quiet
+            };
+            out.push(Move::new(from, to, flag));
+        }
+    }
+}
+
+fn gen_pawn_moves(
+    pos: &Position,
+    us: Color,
+    occ: Bitboard,
+    their_pieces: Bitboard,
+    out: &mut MoveList,
+) {
+    use crate::types::{File, Rank};
+    let mut pawns = pos.bitboards[us.index()][PieceKind::Pawn as usize];
+    let (push_dir, double_rank, promo_rank) = match us {
+        Color::White => (1i32, Rank::Two, Rank::Eight),
+        Color::Black => (-1i32, Rank::Seven, Rank::One),
+    };
+
+    while let Some(from) = pawns.pop_lsb() {
+        let r = from.rank() as i32;
+        let f = from.file() as i32;
+
+        // single push
+        let nr = r + push_dir;
+        if (0..8).contains(&nr) {
+            let to = Square::new(
+                File::from_index(f as u8).unwrap(),
+                Rank::from_index(nr as u8).unwrap(),
+            );
+            if !occ.contains(to) {
+                if to.rank() == promo_rank {
+                    for promo in [
+                        MoveFlag::PromoQueen,
+                        MoveFlag::PromoRook,
+                        MoveFlag::PromoBishop,
+                        MoveFlag::PromoKnight,
+                    ] {
+                        out.push(Move::new(from, to, promo));
+                    }
+                } else {
+                    out.push(Move::new(from, to, MoveFlag::Quiet));
+                    if from.rank() == double_rank {
+                        let nr2 = r + 2 * push_dir;
+                        let to2 = Square::new(
+                            File::from_index(f as u8).unwrap(),
+                            Rank::from_index(nr2 as u8).unwrap(),
+                        );
+                        if !occ.contains(to2) {
+                            out.push(Move::new(from, to2, MoveFlag::DoublePawnPush));
+                        }
+                    }
+                }
+            }
+        }
+
+        // diagonal captures
+        for df in [-1i32, 1] {
+            let nf = f + df;
+            if !(0..8).contains(&nf) || !(0..8).contains(&nr) {
+                continue;
+            }
+            let to = Square::new(
+                File::from_index(nf as u8).unwrap(),
+                Rank::from_index(nr as u8).unwrap(),
+            );
+            if their_pieces.contains(to) {
+                if to.rank() == promo_rank {
+                    for promo in [
+                        MoveFlag::PromoCaptureQ,
+                        MoveFlag::PromoCaptureR,
+                        MoveFlag::PromoCaptureB,
+                        MoveFlag::PromoCaptureN,
+                    ] {
+                        out.push(Move::new(from, to, promo));
+                    }
+                } else {
+                    out.push(Move::new(from, to, MoveFlag::Capture));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::position::Position;
+
+    #[test]
+    fn starting_position_has_20_pseudo_legal_moves() {
+        let pos = Position::starting();
+        let moves = pseudo_legal_moves(&pos);
+        assert_eq!(moves.len(), 20);
+    }
+
+    #[test]
+    fn black_to_move_starting_position_has_20() {
+        let mut pos = Position::starting();
+        pos.side_to_move = crate::types::Color::Black;
+        assert_eq!(pseudo_legal_moves(&pos).len(), 20);
+    }
+}
