@@ -1,5 +1,6 @@
 use crate::attacks::*;
 use crate::bitboard::Bitboard;
+use crate::make_move::{make_move as do_make, unmake_move as do_unmake};
 use crate::moves::{Move, MoveFlag, MoveList};
 use crate::position::Position;
 use crate::types::{Color, PieceKind, Square};
@@ -168,6 +169,61 @@ fn gen_castling(pos: &Position, us: Color, occ: Bitboard, out: &mut MoveList) {
     }
 }
 
+pub fn square_attacked(pos: &Position, sq: Square, by: Color) -> bool {
+    let occ = pos.all_pieces();
+    let bbs = &pos.bitboards[by.index()];
+
+    if (pawn_attacks(by.flip(), sq) & bbs[PieceKind::Pawn as usize]).0 != 0 { return true; }
+    if (knight_attacks(sq)         & bbs[PieceKind::Knight as usize]).0 != 0 { return true; }
+    if (king_attacks(sq)           & bbs[PieceKind::King as usize]).0 != 0 { return true; }
+    let bishops_queens = bbs[PieceKind::Bishop as usize] | bbs[PieceKind::Queen as usize];
+    if (bishop_attacks(sq, occ) & bishops_queens).0 != 0 { return true; }
+    let rooks_queens = bbs[PieceKind::Rook as usize] | bbs[PieceKind::Queen as usize];
+    if (rook_attacks(sq, occ) & rooks_queens).0 != 0 { return true; }
+    false
+}
+
+pub fn is_in_check(pos: &Position) -> bool {
+    let us = pos.side_to_move;
+    let king_bb = pos.bitboards[us.index()][PieceKind::King as usize];
+    if king_bb.0 == 0 { return false; }
+    let king_sq = Square::from_index(king_bb.0.trailing_zeros() as u8).unwrap();
+    square_attacked(pos, king_sq, us.flip())
+}
+
+pub fn legal_moves(pos: &Position) -> MoveList {
+    use crate::types::File;
+    let mut out = MoveList::new();
+    let pseudo = pseudo_legal_moves(pos);
+    let mut probe = pos.clone();
+    let us = pos.side_to_move;
+
+    for m in pseudo {
+        // For castling, also check the king doesn't pass through check or start in check.
+        if m.flag() == MoveFlag::KingCastle || m.flag() == MoveFlag::QueenCastle {
+            let rank = m.from().rank();
+            let through_file = if m.flag() == MoveFlag::KingCastle { File::F } else { File::D };
+            let through = Square::new(through_file, rank);
+            if square_attacked(&probe, m.from(), us.flip())
+                || square_attacked(&probe, through, us.flip()) {
+                continue;
+            }
+        }
+        let undo = do_make(&mut probe, m);
+        // After the move, our king must not be under attack from the now-side-to-move.
+        let king_bb = probe.bitboards[us.index()][PieceKind::King as usize];
+        let ok = if king_bb.0 == 0 {
+            true
+        } else {
+            let king_sq = Square::from_index(king_bb.0.trailing_zeros() as u8).unwrap();
+            !square_attacked(&probe, king_sq, us.flip())
+        };
+        do_unmake(&mut probe, m, undo);
+        if ok { out.push(m); }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +262,32 @@ mod tests {
             .filter(|m| m.flag() == crate::moves::MoveFlag::EnPassant)
             .collect();
         assert_eq!(ep_moves.len(), 1);
+    }
+
+    #[test]
+    fn starting_position_has_20_legal_moves() {
+        let pos = Position::starting();
+        assert_eq!(legal_moves(&pos).len(), 20);
+    }
+
+    #[test]
+    fn pinned_piece_cannot_move() {
+        let fen = "4r3/8/8/8/8/8/4N3/4K3 w - - 0 1";
+        let pos = crate::fen::parse_fen(fen).unwrap();
+        let legal = legal_moves(&pos);
+        let knight_moves: Vec<_> = legal.iter()
+            .filter(|m| m.from() == crate::types::Square::new(crate::types::File::E, crate::types::Rank::Two))
+            .collect();
+        assert_eq!(knight_moves.len(), 0);
+    }
+
+    #[test]
+    fn cannot_castle_through_check() {
+        let fen = "5r2/8/8/8/8/8/8/4K2R w K - 0 1";
+        let pos = crate::fen::parse_fen(fen).unwrap();
+        let castles: Vec<_> = legal_moves(&pos).into_iter()
+            .filter(|m| m.flag() == crate::moves::MoveFlag::KingCastle)
+            .collect();
+        assert_eq!(castles.len(), 0);
     }
 }
