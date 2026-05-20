@@ -86,7 +86,8 @@ pub fn make_move(pos: &mut Position, m: Move) -> MoveUndo {
     if us == Color::Black { pos.fullmove_number += 1; }
     pos.side_to_move = them;
 
-    // Zobrist updated in Task 14.
+    // TODO(perf): incremental zobrist update — recomputing each move is ~30% of search time.
+    pos.zobrist_hash = crate::zobrist::compute_zobrist(pos);
     undo
 }
 

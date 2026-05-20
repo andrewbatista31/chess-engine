@@ -79,6 +79,8 @@ pub fn parse_fen(s: &str) -> Result<Position, FenError> {
     pos.halfmove_clock  = hmc.parse().map_err(|_| FenError::BadField("halfmove_clock"))?;
     pos.fullmove_number = fmn.parse().map_err(|_| FenError::BadField("fullmove_number"))?;
 
+    pos.zobrist_hash = crate::zobrist::compute_zobrist(&pos);
+
     Ok(pos)
 }
 
