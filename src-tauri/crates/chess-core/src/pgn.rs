@@ -161,6 +161,103 @@ fn parse_sq_bytes(bytes: &[u8]) -> Option<Square> {
     Some(Square::new(f, r))
 }
 
+pub fn serialize_pgn(game: &Game) -> String {
+    let mut out = String::new();
+    let tag_order = ["Event", "Site", "Date", "Round", "White", "Black", "Result"];
+    for &name in &tag_order {
+        if let Some(v) = game.tags.get(name) {
+            out.push_str(&format!("[{name} \"{v}\"]\n"));
+        }
+    }
+    for (k, v) in &game.tags {
+        if !tag_order.contains(&k.as_str()) {
+            out.push_str(&format!("[{k} \"{v}\"]\n"));
+        }
+    }
+    out.push('\n');
+
+    let mut pos = Position::starting();
+    for (i, &m) in game.moves.iter().enumerate() {
+        if i % 2 == 0 {
+            out.push_str(&format!("{}. ", i / 2 + 1));
+        }
+        out.push_str(&move_to_san(&pos, m));
+        out.push(' ');
+        make_move(&mut pos, m);
+    }
+    out.push_str(&game.result);
+    out.push('\n');
+    out
+}
+
+fn move_to_san(pos: &Position, m: Move) -> String {
+    if m.flag() == MoveFlag::KingCastle  { return base_with_suffix(pos, m, "O-O".into()); }
+    if m.flag() == MoveFlag::QueenCastle { return base_with_suffix(pos, m, "O-O-O".into()); }
+
+    let p = pos.piece_at(m.from()).expect("piece on from");
+    let mut s = String::new();
+    let is_capture = m.flag().is_capture();
+    let dest = sq_str(m.to());
+
+    if p.kind == PieceKind::Pawn {
+        if is_capture {
+            s.push(file_char(m.from().file()));
+            s.push('x');
+        }
+        s.push_str(&dest);
+    } else {
+        s.push(piece_letter(p.kind));
+        // Disambiguation: check if other same-kind pieces also can reach `to`.
+        let competitors: Vec<Move> = legal_moves(pos).into_iter()
+            .filter(|cm| cm.to() == m.to()
+                     && cm.from() != m.from()
+                     && pos.piece_at(cm.from()).map_or(false, |q| q.kind == p.kind))
+            .collect();
+        if !competitors.is_empty() {
+            let same_file = competitors.iter().any(|c| c.from().file() == m.from().file());
+            let same_rank = competitors.iter().any(|c| c.from().rank() == m.from().rank());
+            if !same_file       { s.push(file_char(m.from().file())); }
+            else if !same_rank  { s.push(rank_char(m.from().rank())); }
+            else { s.push(file_char(m.from().file())); s.push(rank_char(m.from().rank())); }
+        }
+        if is_capture { s.push('x'); }
+        s.push_str(&dest);
+    }
+
+    if let Some(promo) = promo_kind(m.flag()) {
+        s.push('=');
+        s.push(piece_letter(promo));
+    }
+
+    base_with_suffix(pos, m, s)
+}
+
+fn base_with_suffix(pos: &Position, m: Move, mut s: String) -> String {
+    let mut probe = pos.clone();
+    let _ = make_move(&mut probe, m);
+    if crate::movegen::is_in_check(&probe) {
+        if legal_moves(&probe).is_empty() { s.push('#'); }
+        else { s.push('+'); }
+    }
+    s
+}
+
+fn piece_letter(k: PieceKind) -> char {
+    match k {
+        PieceKind::Knight => 'N', PieceKind::Bishop => 'B',
+        PieceKind::Rook   => 'R', PieceKind::Queen  => 'Q',
+        PieceKind::King   => 'K', PieceKind::Pawn   => 'P',
+    }
+}
+fn file_char(f: File) -> char { (b'a' + f as u8) as char }
+fn rank_char(r: Rank) -> char { (b'1' + r as u8) as char }
+fn sq_str(sq: Square) -> String {
+    let mut s = String::with_capacity(2);
+    s.push(file_char(sq.file()));
+    s.push(rank_char(sq.rank()));
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,5 +289,14 @@ mod tests {
     fn rejects_illegal_san() {
         let bad = "[Result \"*\"]\n\n1. e9 *\n";
         assert!(parse_pgn(bad).is_err());
+    }
+
+    #[test]
+    fn serialize_then_parse_round_trip() {
+        let game = parse_pgn(SCHOLARS_MATE).unwrap();
+        let written = serialize_pgn(&game);
+        let reparsed = parse_pgn(&written).unwrap();
+        assert_eq!(reparsed.moves, game.moves);
+        assert_eq!(reparsed.result, game.result);
     }
 }
