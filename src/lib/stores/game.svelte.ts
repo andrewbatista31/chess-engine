@@ -38,6 +38,15 @@ class GameStore {
     this.currentFen = this.fenAt(this.cursor);
   }
 
+  async loadFen(fen: string): Promise<void> {
+    const ok = await tauri.validateFen(fen);
+    if (!ok) throw new Error("Invalid FEN");
+    this.startingFen = fen;
+    this.currentFen = fen;
+    this.history = [];
+    this.cursor = 0;
+  }
+
   reset(): void {
     this.startingFen = STARTING_FEN;
     this.currentFen = STARTING_FEN;

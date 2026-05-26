@@ -8,10 +8,12 @@ vi.mock("../tauri.ts", () => ({
       san: `${mv.from}${mv.to}`,
       outcome: null,
     })),
+    validateFen: vi.fn(async () => true),
   },
 }));
 
 const { gameStore, STARTING_FEN } = await import("./game.svelte.ts");
+const { tauri } = await import("../tauri.ts");
 
 describe("gameStore", () => {
   beforeEach(() => {
@@ -80,5 +82,25 @@ describe("gameStore undo/redo", () => {
     await gameStore.makeMove({ from: "d7", to: "d5", promotion: null });
     expect(gameStore.history).toHaveLength(2);
     expect(gameStore.history[1].san).toBe("d7d5");
+  });
+});
+
+describe("gameStore.loadFen", () => {
+  beforeEach(() => {
+    gameStore.reset();
+  });
+
+  it("replaces state with the new FEN and clears history when valid", async () => {
+    (tauri.validateFen as any) = vi.fn(async () => true);
+    const fen = "8/8/8/3k4/3K4/8/8/8 w - - 0 1";
+    await gameStore.loadFen(fen);
+    expect(gameStore.currentFen).toBe(fen);
+    expect(gameStore.history).toEqual([]);
+    expect(gameStore.cursor).toBe(0);
+  });
+
+  it("throws on invalid FEN", async () => {
+    (tauri.validateFen as any) = vi.fn(async () => false);
+    await expect(gameStore.loadFen("garbage")).rejects.toThrow();
   });
 });

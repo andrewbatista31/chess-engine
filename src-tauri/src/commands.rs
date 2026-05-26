@@ -126,6 +126,11 @@ pub fn make_move(fen: String, mv: MoveDto) -> Result<MakeMoveResult, String> {
     Ok(MakeMoveResult { new_fen, san, outcome })
 }
 
+#[tauri::command]
+pub fn validate_fen(fen: String) -> bool {
+    cc::parse_fen(&fen).is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,5 +178,15 @@ mod tests {
         let outcome = result.outcome.expect("checkmate expected");
         assert_eq!(outcome.kind, "Checkmate");
         assert_eq!(outcome.winner.as_deref(), Some("Black"));
+    }
+
+    #[test]
+    fn validate_fen_accepts_valid() {
+        assert!(validate_fen(START.into()));
+    }
+    #[test]
+    fn validate_fen_rejects_invalid() {
+        assert!(!validate_fen("not a fen".into()));
+        assert!(!validate_fen("8/8/8/8/8/8/8 w - - 0 1".into())); // only 7 ranks
     }
 }

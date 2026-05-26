@@ -37,4 +37,7 @@ export const tauri = {
   makeMove(fen: string, mv: MoveDto): Promise<MakeMoveResult> {
     return invoke("make_move", { fen, mv });
   },
+  validateFen(fen: string): Promise<boolean> {
+    return invoke("validate_fen", { fen });
+  },
 };

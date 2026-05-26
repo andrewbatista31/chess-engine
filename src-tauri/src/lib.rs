@@ -6,6 +6,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::legal_moves,
             commands::make_move,
+            commands::validate_fen,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
