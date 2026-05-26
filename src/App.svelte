@@ -1,4 +1,7 @@
+<script lang="ts">
+  import Board from "./lib/board/Board.svelte";
+</script>
+
 <main>
-  <h1>Hello chess-engine</h1>
-  <p>Plan 2 scaffold — chess board coming in Task 2.</p>
+  <Board />
 </main>
