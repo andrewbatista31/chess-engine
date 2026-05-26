@@ -58,6 +58,8 @@
   function onKey(e: KeyboardEvent) {
     if (e.ctrlKey && e.key === "z") { e.preventDefault(); gameStore.undo(); }
     else if (e.ctrlKey && e.key === "y") { e.preventDefault(); gameStore.redo(); }
+    else if (e.ctrlKey && e.key === "s") { e.preventDefault(); savePgn(); }
+    else if (e.ctrlKey && e.key === "o") { e.preventDefault(); loadPgn(); }
   }
 </script>
 

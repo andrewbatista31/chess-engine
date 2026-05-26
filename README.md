@@ -1,21 +1,27 @@
 # chess-engine
 
-A desktop chess application with a from-scratch club-strength chess engine, plus Stockfish integration for comparison and analysis.
+A desktop chess application built with Tauri + Svelte, backed by a from-scratch
+Rust chess engine (in progress).
 
-**Status:** design phase. See [docs/superpowers/specs/2026-05-20-chess-engine-design.md](docs/superpowers/specs/2026-05-20-chess-engine-design.md).
+## Status
 
-## Stack
+- **Plan 1: chess-core** — complete. Bitboard rules library, FEN/PGN, perft-validated.
+- **Plan 2: playable board** — complete. Tauri + Svelte UI; hot-seat play with undo/redo, FEN load, PGN save/load, game-over banner.
+- **Plan 3+: engines** — upcoming. Stockfish UCI integration, then DIY engine.
 
-- Rust (engine, rules, Tauri commands)
-- Svelte + TypeScript (frontend)
-- Tauri (desktop app shell)
-- Stockfish (bundled, UCI)
+## Run
 
-## Features (planned for v1)
+```
+npm install
+npm run tauri dev
+```
 
-- Play yourself (free play, both sides local)
-- Play vs engine (DIY or Stockfish, either side)
-- Engine vs engine (DIY vs Stockfish)
-- Position setup via FEN or board editor
-- Live analysis: top-N candidate moves, principal variations, eval bar
-- PGN save/load, undo/redo
+## Limitations (Plan 2)
+
+- Pawn promotion auto-defaults to Queen (no picker UI yet).
+- History sidebar is read-only — clickable navigation to past positions is a planned follow-up.
+- No engine — coming in Plan 3.
+
+## Attribution
+
+Chess piece graphics: Cburnett (Wikimedia, CC-BY-SA 3.0). See `ATTRIBUTION.md`.
