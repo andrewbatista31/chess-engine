@@ -1,11 +1,12 @@
 <script lang="ts">
   import Board from "./lib/board/Board.svelte";
   import HistoryPanel from "./lib/panels/HistoryPanel.svelte";
+  import Toolbar from "./lib/panels/Toolbar.svelte";
 </script>
 
 <div class="app">
   <header class="toolbar">
-    <!-- Toolbar arrives in Task 6 -->
+    <Toolbar />
   </header>
   <section class="board-area">
     <Board />
