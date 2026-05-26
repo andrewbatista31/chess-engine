@@ -9,6 +9,7 @@ class GameStore {
   currentFen = $state(STARTING_FEN);
   history: MoveEntry[] = $state([]);
   cursor = $state(0);
+  tags: Record<string, string> = $state({});
 
   private fenAt(c: number): string {
     return c === 0 ? this.startingFen : this.history[c - 1].fen_after;
@@ -21,6 +22,7 @@ class GameStore {
       san: result.san,
       fen_after: result.new_fen,
       outcome: result.outcome,
+      mv,
     });
     this.cursor = this.history.length;
     this.currentFen = result.new_fen;
@@ -52,6 +54,27 @@ class GameStore {
     this.currentFen = STARTING_FEN;
     this.history = [];
     this.cursor = 0;
+    this.tags = {};
+  }
+
+  async savePgn(path: string): Promise<void> {
+    const moves = this.history.slice(0, this.cursor).map((e) => e.mv);
+    const text = await tauri.serializePgn(moves, this.tags);
+    await tauri.savePgnFile(path, text);
+  }
+
+  async loadPgn(text: string): Promise<void> {
+    const game = await tauri.parsePgn(text);
+    this.startingFen = STARTING_FEN;
+    this.currentFen = game.final_fen;
+    this.tags = game.tags;
+    this.history = game.moves.map((m) => ({
+      san: m.san,
+      fen_after: m.fen_after,
+      outcome: m.outcome,
+      mv: m.mv,
+    }));
+    this.cursor = this.history.length;
   }
 }
 

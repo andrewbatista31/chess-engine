@@ -27,6 +27,7 @@ pub struct MoveEntry {
     pub san: String,
     pub fen_after: String,
     pub outcome: Option<OutcomeDto>,
+    pub mv: MoveDto,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -131,6 +132,75 @@ pub fn validate_fen(fen: String) -> bool {
     cc::parse_fen(&fen).is_ok()
 }
 
+use std::fs;
+
+/// Parse PGN text into a list of moves keyed for the frontend.
+#[tauri::command]
+pub fn parse_pgn(text: String) -> Result<GameDto, String> {
+    let game = cc::parse_pgn(&text).map_err(|e| format!("PGN parse error: {e:?}"))?;
+    let mut pos = cc::Position::starting();
+    let mut entries = Vec::with_capacity(game.moves.len());
+    for m in &game.moves {
+        let san = cc::move_to_san(&pos, *m);
+        cc::make_move(&mut pos, *m);
+        let fen_after = cc::serialize_fen(&pos);
+        let outcome = cc::detect_outcome(&pos).map(|o| outcome_to_dto(o, pos.side_to_move));
+        entries.push(MoveEntry { san, fen_after, outcome, mv: move_to_dto(*m) });
+    }
+    Ok(GameDto {
+        tags: game.tags,
+        moves: entries,
+        result: game.result,
+        final_fen: cc::serialize_fen(&pos),
+    })
+}
+
+/// Serialize a list of MoveDtos (plus tags) into PGN text.
+#[tauri::command]
+pub fn serialize_pgn(moves: Vec<MoveDto>, tags: HashMap<String, String>) -> Result<String, String> {
+    let mut pos = cc::Position::starting();
+    let mut core_moves: Vec<cc::Move> = Vec::with_capacity(moves.len());
+    for mv in moves {
+        let from_sq = parse_square(&mv.from).ok_or_else(|| format!("Invalid 'from': {}", mv.from))?;
+        let to_sq = parse_square(&mv.to).ok_or_else(|| format!("Invalid 'to': {}", mv.to))?;
+        let want_promo: Option<cc::PieceKind> = mv.promotion.and_then(|c| match c {
+            'Q' => Some(cc::PieceKind::Queen),
+            'R' => Some(cc::PieceKind::Rook),
+            'B' => Some(cc::PieceKind::Bishop),
+            'N' => Some(cc::PieceKind::Knight),
+            _ => None,
+        });
+        let core_mv = cc::legal_moves(&pos).into_iter().find(|m| {
+            if m.from() != from_sq || m.to() != to_sq { return false; }
+            if m.flag().is_promotion() {
+                promo_kind_of_flag(m.flag()) == Some(want_promo.unwrap_or(cc::PieceKind::Queen))
+            } else {
+                want_promo.is_none()
+            }
+        }).ok_or_else(|| format!("Illegal move during serialize: {} -> {}", mv.from, mv.to))?;
+        cc::make_move(&mut pos, core_mv);
+        core_moves.push(core_mv);
+    }
+    let result = tags.get("Result").cloned().unwrap_or_else(|| "*".to_string());
+    let game = cc::Game {
+        tags,
+        moves: core_moves,
+        result,
+        final_position: pos,
+    };
+    Ok(cc::serialize_pgn(&game))
+}
+
+#[tauri::command]
+pub fn save_pgn_file(path: String, text: String) -> Result<(), String> {
+    fs::write(&path, text).map_err(|e| format!("Could not save: {e}"))
+}
+
+#[tauri::command]
+pub fn load_pgn_file(path: String) -> Result<String, String> {
+    fs::read_to_string(&path).map_err(|e| format!("Could not read: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,5 +258,30 @@ mod tests {
     fn validate_fen_rejects_invalid() {
         assert!(!validate_fen("not a fen".into()));
         assert!(!validate_fen("8/8/8/8/8/8/8 w - - 0 1".into())); // only 7 ranks
+    }
+
+    #[test]
+    fn parse_pgn_round_trips_scholars_mate() {
+        let pgn = "[Event \"Test\"]\n\n1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0\n";
+        let game = parse_pgn(pgn.into()).unwrap();
+        assert_eq!(game.moves.len(), 7);
+        assert_eq!(game.result, "1-0");
+        let last = &game.moves[6];
+        assert_eq!(last.san, "Qxf7#");
+        assert_eq!(last.outcome.as_ref().unwrap().kind, "Checkmate");
+    }
+
+    #[test]
+    fn serialize_pgn_then_parse_pgn_round_trip() {
+        let mut tags = HashMap::new();
+        tags.insert("White".into(), "A".into());
+        tags.insert("Result".into(), "*".into());
+        let moves = vec![
+            MoveDto { from: "e2".into(), to: "e4".into(), promotion: None },
+            MoveDto { from: "e7".into(), to: "e5".into(), promotion: None },
+        ];
+        let text = serialize_pgn(moves, tags).unwrap();
+        let game = parse_pgn(text).unwrap();
+        assert_eq!(game.moves.len(), 2);
     }
 }

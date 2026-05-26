@@ -1,6 +1,7 @@
 <script lang="ts">
   import { gameStore } from "../stores/game.svelte.ts";
   import { tauri } from "../tauri.ts";
+  import { open, save } from "@tauri-apps/plugin-dialog";
 
   let fenInput = $state(gameStore.currentFen);
   let fenValid = $state(true);
@@ -27,6 +28,33 @@
     }
   }
 
+  async function savePgn() {
+    const path = await save({
+      defaultPath: "game.pgn",
+      filters: [{ name: "PGN", extensions: ["pgn"] }],
+    });
+    if (!path) return;
+    try {
+      await gameStore.savePgn(path);
+    } catch (e) {
+      alert(`Could not save: ${e}`);
+    }
+  }
+
+  async function loadPgn() {
+    const path = await open({
+      filters: [{ name: "PGN", extensions: ["pgn"] }],
+      multiple: false,
+    });
+    if (!path || Array.isArray(path)) return;
+    try {
+      const text = await tauri.loadPgnFile(path);
+      await gameStore.loadPgn(text);
+    } catch (e) {
+      alert(`Could not load: ${e}`);
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.ctrlKey && e.key === "z") { e.preventDefault(); gameStore.undo(); }
     else if (e.ctrlKey && e.key === "y") { e.preventDefault(); gameStore.redo(); }
@@ -49,7 +77,8 @@
   <div class="spacer"></div>
   <button onclick={() => gameStore.undo()} disabled={!canUndo}>← Undo</button>
   <button onclick={() => gameStore.redo()} disabled={!canRedo}>Redo →</button>
-  <div class="placeholder pgn-slot">PGN buttons arrive in Task 9</div>
+  <button onclick={savePgn}>Save PGN</button>
+  <button onclick={loadPgn}>Load PGN</button>
 </div>
 
 <style>
@@ -62,7 +91,6 @@
     color: #ddd;
   }
   .spacer { flex: 1; }
-  .placeholder { font-style: italic; color: #777; font-size: 12px; }
   .fen {
     flex: 1;
     max-width: 600px;
