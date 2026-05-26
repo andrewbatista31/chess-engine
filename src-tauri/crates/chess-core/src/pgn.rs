@@ -190,7 +190,7 @@ pub fn serialize_pgn(game: &Game) -> String {
     out
 }
 
-fn move_to_san(pos: &Position, m: Move) -> String {
+pub fn move_to_san(pos: &Position, m: Move) -> String {
     if m.flag() == MoveFlag::KingCastle  { return base_with_suffix(pos, m, "O-O".into()); }
     if m.flag() == MoveFlag::QueenCastle { return base_with_suffix(pos, m, "O-O-O".into()); }
 

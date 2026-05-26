@@ -23,7 +23,7 @@ pub mod prelude {
     pub use crate::moves::{Move, MoveFlag, MoveList};
     pub use crate::outcome::{detect_outcome, Outcome};
     pub use crate::perft::{perft, perft_divide};
-    pub use crate::pgn::{parse_pgn, serialize_pgn, Game, PgnError};
+    pub use crate::pgn::{move_to_san, parse_pgn, serialize_pgn, Game, PgnError};
     pub use crate::position::{CastlingRights, Position};
     pub use crate::types::{Color, File, Piece, PieceKind, Rank, Square};
 }
