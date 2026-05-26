@@ -104,3 +104,32 @@ describe("gameStore.loadFen", () => {
     await expect(gameStore.loadFen("garbage")).rejects.toThrow();
   });
 });
+
+describe("gameStore.outcome", () => {
+  beforeEach(() => { gameStore.reset(); });
+
+  it("is null at the start", () => {
+    expect(gameStore.outcome).toBeNull();
+  });
+
+  it("is the outcome of the last move when present", async () => {
+    (tauri.makeMove as any) = vi.fn(async () => ({
+      new_fen: "mate-fen",
+      san: "Qh4#",
+      outcome: { kind: "Checkmate", winner: "Black" },
+    }));
+    await gameStore.makeMove({ from: "d8", to: "h4", promotion: null });
+    expect(gameStore.outcome).toEqual({ kind: "Checkmate", winner: "Black" });
+  });
+
+  it("returns to null after undo from a terminal position", async () => {
+    (tauri.makeMove as any) = vi.fn(async () => ({
+      new_fen: "mate-fen",
+      san: "Qh4#",
+      outcome: { kind: "Checkmate", winner: "Black" },
+    }));
+    await gameStore.makeMove({ from: "d8", to: "h4", promotion: null });
+    gameStore.undo();
+    expect(gameStore.outcome).toBeNull();
+  });
+});

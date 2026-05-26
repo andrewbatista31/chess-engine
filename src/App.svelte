@@ -2,6 +2,7 @@
   import Board from "./lib/board/Board.svelte";
   import HistoryPanel from "./lib/panels/HistoryPanel.svelte";
   import Toolbar from "./lib/panels/Toolbar.svelte";
+  import GameOverBanner from "./lib/panels/GameOverBanner.svelte";
 </script>
 
 <div class="app">
@@ -13,6 +14,7 @@
   </section>
   <HistoryPanel />
 </div>
+<GameOverBanner />
 
 <style>
   .app {

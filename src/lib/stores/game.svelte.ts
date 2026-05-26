@@ -9,6 +9,9 @@ class GameStore {
   currentFen = $state(STARTING_FEN);
   history: MoveEntry[] = $state([]);
   cursor = $state(0);
+  outcome = $derived(
+    this.cursor > 0 ? this.history[this.cursor - 1].outcome : null
+  );
   tags: Record<string, string> = $state({});
 
   private fenAt(c: number): string {
