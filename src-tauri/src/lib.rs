@@ -29,6 +29,7 @@ pub fn run() {
             commands::save_pgn_file,
             commands::load_pgn_file,
             commands::start_analysis,
+            commands::reset_engine,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

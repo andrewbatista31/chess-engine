@@ -10,11 +10,9 @@ class AnalysisStore {
     if (best.score.kind === "Mate") {
       return best.score.value > 0 ? 1.0 : 0.0;
     }
-    // Lichess-style sigmoid: 2/(1+exp(-cp/400)) - 1 in (-1, 1).
-    // Score is from side-to-move's POV; UI convention: positive = White advantage.
-    // The store doesn't know side-to-move on its own — callers should pass cp already
-    // flipped from White's perspective. For Plan 3 we accept the side-to-move convention
-    // and the EvalBar inverts the bar when it's black to move.
+    // Lichess-style sigmoid: 2/(1+exp(-cp/400)) - 1 in (-1, 1), mapped to (0, 1).
+    // Score is always from White's perspective (the backend pre-flips for Black-to-move positions),
+    // so positive cp → bar fills upward with white.
     const cp = best.score.value;
     const v = 2 / (1 + Math.exp(-cp / 400)) - 1; // (-1, 1)
     return (v + 1) / 2; // (0, 1)

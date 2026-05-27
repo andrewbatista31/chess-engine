@@ -313,11 +313,20 @@ pub async fn start_analysis<R: Runtime>(
             SearchLimits { movetime_ms, multipv },
             skill_level,
             Box::new(move |info: ApiAnalysisInfo| {
+                // Convert Stockfish's side-to-move-POV score to White-POV for the UI.
+                let score_white_pov = if pos_for_san.side_to_move == cc::Color::Black {
+                    match info.score {
+                        Score::Cp(v) => Score::Cp(-v),
+                        Score::Mate(v) => Score::Mate(-v),
+                    }
+                } else {
+                    info.score
+                };
                 let pv_san = chess_engine_uci::pv_to_san(&pos_for_san, &info.pv);
                 let evt = AnalysisInfoEvent {
                     search_id,
                     depth: info.depth,
-                    score: info.score.into(),
+                    score: score_white_pov.into(),
                     pv_san,
                     multipv_index: info.multipv_index,
                     nodes: info.nodes,
@@ -335,6 +344,13 @@ pub async fn start_analysis<R: Runtime>(
     });
 
     Ok(search_id)
+}
+
+#[tauri::command]
+pub async fn reset_engine(manager: tauri::State<'_, EngineManager>) -> Result<(), String> {
+    let mut guard = manager.engine.lock().map_err(|e| e.to_string())?;
+    *guard = None; // Dropping the StockfishEngine kills the child process.
+    Ok(())
 }
 
 #[cfg(test)]

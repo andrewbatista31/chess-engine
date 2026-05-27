@@ -77,4 +77,7 @@ export const tauri = {
   startAnalysis(fen: string, skill_level: number, movetime_ms: number, multipv: number): Promise<number> {
     return invoke("start_analysis", { fen, skillLevel: skill_level, movetimeMs: movetime_ms, multipv });
   },
+  resetEngine(): Promise<void> {
+    return invoke("reset_engine");
+  },
 };
