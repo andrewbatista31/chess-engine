@@ -323,6 +323,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chess-engine-api"
+version = "0.1.0"
+dependencies = [
+ "chess-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "chess-engine-app"
 version = "0.1.0"
 dependencies = [
