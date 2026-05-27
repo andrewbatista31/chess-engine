@@ -336,11 +336,14 @@ name = "chess-engine-app"
 version = "0.1.0"
 dependencies = [
  "chess-core",
+ "chess-engine-api",
+ "chess-engine-uci",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tokio",
 ]
 
 [[package]]

@@ -201,6 +201,142 @@ pub fn load_pgn_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read: {e}"))
 }
 
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex as StdMutex;
+
+use chess_engine_api::{AnalysisInfo as ApiAnalysisInfo, Engine, SearchLimits, Score};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "kind", content = "value")]
+pub enum ScoreDto {
+    Cp(i32),
+    Mate(i8),
+}
+
+impl From<Score> for ScoreDto {
+    fn from(s: Score) -> Self {
+        match s {
+            Score::Cp(v) => ScoreDto::Cp(v),
+            Score::Mate(v) => ScoreDto::Mate(v),
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct AnalysisInfoEvent {
+    pub search_id: u64,
+    pub depth: u8,
+    pub score: ScoreDto,
+    pub pv_san: Vec<String>,
+    pub multipv_index: u8,
+    pub nodes: u64,
+    pub nps: u64,
+    pub time_ms: u32,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct EngineBestMoveEvent {
+    pub search_id: u64,
+    pub mv: MoveDto,
+}
+
+pub struct EngineManager {
+    pub engine: StdMutex<Option<Box<dyn Engine + Send>>>,
+    pub next_search_id: AtomicU64,
+    pub current_search_id: AtomicU64,
+    pub stockfish_path: PathBuf,
+}
+
+impl EngineManager {
+    pub fn new(stockfish_path: PathBuf) -> Self {
+        Self {
+            engine: StdMutex::new(None),
+            next_search_id: AtomicU64::new(1),
+            current_search_id: AtomicU64::new(0),
+            stockfish_path,
+        }
+    }
+}
+
+/// Lazily construct the Stockfish engine the first time it's needed.
+/// Test setups can pre-populate `manager.engine` with a MockEngine before invoking commands.
+fn ensure_stockfish(manager: &EngineManager) -> Result<(), String> {
+    let mut guard = manager.engine.lock().map_err(|e| e.to_string())?;
+    if guard.is_some() { return Ok(()); }
+    let rt = tokio::runtime::Handle::try_current()
+        .map_err(|_| "No tokio runtime available".to_string())?;
+    let eng = chess_engine_uci::StockfishEngine::new(manager.stockfish_path.clone(), rt);
+    *guard = Some(Box::new(eng));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_analysis<R: Runtime>(
+    app: AppHandle<R>,
+    fen: String,
+    skill_level: u8,
+    movetime_ms: u32,
+    multipv: u8,
+) -> Result<u64, String> {
+    let pos = cc::parse_fen(&fen).map_err(|e| format!("Invalid FEN: {e:?}"))?;
+    let manager = app.state::<EngineManager>();
+    ensure_stockfish(&manager)?;
+
+    let search_id = manager.next_search_id.fetch_add(1, Ordering::SeqCst);
+    manager.current_search_id.store(search_id, Ordering::SeqCst);
+
+    // Clone what the closures need.
+    let app_clone = app.clone();
+    let pos_clone = pos.clone();
+
+    // The engine's analyze() blocks until bestmove arrives. Run it on a Tokio blocking
+    // thread so the Tauri command returns the search_id immediately.
+    tokio::task::spawn_blocking(move || {
+        let manager = app_clone.state::<EngineManager>();
+        let mut guard = match manager.engine.lock() {
+            Ok(g) => g,
+            Err(e) => { eprintln!("[start_analysis] engine mutex poisoned: {e}"); return; }
+        };
+        let engine = match guard.as_mut() {
+            Some(e) => e,
+            None => { eprintln!("[start_analysis] engine slot empty"); return; }
+        };
+
+        let pos_for_san = pos_clone.clone();
+        let app_for_info = app_clone.clone();
+        let app_for_best = app_clone.clone();
+
+        engine.analyze(
+            pos_clone,
+            SearchLimits { movetime_ms, multipv },
+            skill_level,
+            Box::new(move |info: ApiAnalysisInfo| {
+                let pv_san = chess_engine_uci::pv_to_san(&pos_for_san, &info.pv);
+                let evt = AnalysisInfoEvent {
+                    search_id,
+                    depth: info.depth,
+                    score: info.score.into(),
+                    pv_san,
+                    multipv_index: info.multipv_index,
+                    nodes: info.nodes,
+                    nps: info.nps,
+                    time_ms: info.time_ms,
+                };
+                let _ = app_for_info.emit("analysis_info", evt);
+            }),
+            Box::new(move |m: cc::Move| {
+                let evt = EngineBestMoveEvent { search_id, mv: move_to_dto(m) };
+                let _ = app_for_best.emit("engine_bestmove", evt);
+            }),
+        );
+        // engine mutex releases here when guard drops.
+    });
+
+    Ok(search_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,5 +419,20 @@ mod tests {
         let text = serialize_pgn(moves, tags).unwrap();
         let game = parse_pgn(text).unwrap();
         assert_eq!(game.moves.len(), 2);
+    }
+
+    #[test]
+    fn score_dto_serializes_with_tag_kind_value() {
+        let dto = ScoreDto::Cp(42);
+        let j = serde_json::to_string(&dto).unwrap();
+        assert_eq!(j, r#"{"kind":"Cp","value":42}"#);
+    }
+
+    #[test]
+    fn engine_manager_search_id_increments() {
+        let mgr = EngineManager::new("nope".into());
+        let id1 = mgr.next_search_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id2 = mgr.next_search_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        assert!(id2 > id1);
     }
 }
