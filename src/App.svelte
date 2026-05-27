@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import Board from "./lib/board/Board.svelte";
+  import EvalBar from "./lib/panels/EvalBar.svelte";
   import HistoryPanel from "./lib/panels/HistoryPanel.svelte";
   import Toolbar from "./lib/panels/Toolbar.svelte";
   import GameOverBanner from "./lib/panels/GameOverBanner.svelte";
@@ -45,6 +46,7 @@
   <header class="toolbar">
     <Toolbar />
   </header>
+  <EvalBar />
   <section class="board-area">
     <Board />
   </section>
@@ -56,11 +58,11 @@
   .app {
     display: grid;
     grid-template-rows: auto 1fr;
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: auto 1fr 280px;   /* eval bar + board area + sidebar */
     height: 100vh;
   }
   .toolbar {
-    grid-column: 1 / span 2;
+    grid-column: 1 / span 3;
     background: #1f1f1f;
     border-bottom: 1px solid #444;
     height: 48px;
