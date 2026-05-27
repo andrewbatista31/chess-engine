@@ -31,6 +31,27 @@ export interface GameDto {
   final_fen: string;
 }
 
+export interface ScoreDto {
+  kind: "Cp" | "Mate";
+  value: number;
+}
+
+export interface AnalysisInfoEvent {
+  search_id: number;
+  depth: number;
+  score: ScoreDto;
+  pv_san: string[];
+  multipv_index: number;
+  nodes: number;
+  nps: number;
+  time_ms: number;
+}
+
+export interface EngineBestMoveEvent {
+  search_id: number;
+  mv: MoveDto;
+}
+
 export const tauri = {
   legalMoves(fen: string): Promise<MoveDto[]> {
     return invoke("legal_moves", { fen });
@@ -52,5 +73,8 @@ export const tauri = {
   },
   loadPgnFile(path: string): Promise<string> {
     return invoke("load_pgn_file", { path });
+  },
+  startAnalysis(fen: string, skill_level: number, movetime_ms: number, multipv: number): Promise<number> {
+    return invoke("start_analysis", { fen, skillLevel: skill_level, movetimeMs: movetime_ms, multipv });
   },
 };
