@@ -2,6 +2,7 @@
   import { gameStore } from "../stores/game.svelte.ts";
   import { tauri } from "../tauri.ts";
   import { open, save } from "@tauri-apps/plugin-dialog";
+  import EnginePickers from "./EnginePickers.svelte";
 
   let fenInput = $state(gameStore.currentFen);
   let fenValid = $state(true);
@@ -77,6 +78,8 @@
   />
   <button onclick={loadFen} disabled={!fenValid || fenChecking}>Load</button>
   <div class="spacer"></div>
+  <EnginePickers />
+  <div class="spacer-narrow"></div>
   <button onclick={() => gameStore.undo()} disabled={!canUndo}>← Undo</button>
   <button onclick={() => gameStore.redo()} disabled={!canRedo}>Redo →</button>
   <button onclick={savePgn}>Save PGN</button>
@@ -93,6 +96,7 @@
     color: #ddd;
   }
   .spacer { flex: 1; }
+  .spacer-narrow { width: 12px; }
   .fen {
     flex: 1;
     max-width: 600px;
