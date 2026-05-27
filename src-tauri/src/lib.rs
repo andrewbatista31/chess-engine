@@ -7,16 +7,24 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let path = app
+            // Resolve the bundled Stockfish path. In release builds Tauri places the
+            // externalBin under BaseDirectory::Resource. In dev (`tauri dev` / `cargo run`)
+            // it lives at <src-tauri>/binaries/...exe, which CARGO_MANIFEST_DIR points to.
+            // `resolve()` succeeds in dev too but returns a path inside target/ that
+            // doesn't exist — so we check for existence and fall back to the source tree.
+            let bin = "stockfish-x86_64-pc-windows-msvc.exe";
+            let resource_attempt = app
                 .path()
-                .resolve(
-                    "binaries/stockfish-x86_64-pc-windows-msvc.exe",
-                    tauri::path::BaseDirectory::Resource,
-                )
-                .unwrap_or_else(|_| {
-                    // Dev fallback: relative to CARGO_MANIFEST_DIR (src-tauri/).
-                    std::path::PathBuf::from("binaries/stockfish-x86_64-pc-windows-msvc.exe")
-                });
+                .resolve(format!("binaries/{bin}"), tauri::path::BaseDirectory::Resource)
+                .ok()
+                .filter(|p| p.exists());
+            let path = resource_attempt.unwrap_or_else(|| {
+                let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                p.push("binaries");
+                p.push(bin);
+                p
+            });
+            eprintln!("[chess-engine-app] Stockfish path: {}", path.display());
             app.manage(commands::EngineManager::new(path));
             Ok(())
         })
