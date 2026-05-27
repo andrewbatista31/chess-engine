@@ -4,6 +4,7 @@
   import Board from "./lib/board/Board.svelte";
   import EvalBar from "./lib/panels/EvalBar.svelte";
   import HistoryPanel from "./lib/panels/HistoryPanel.svelte";
+  import AnalysisPanel from "./lib/panels/AnalysisPanel.svelte";
   import Toolbar from "./lib/panels/Toolbar.svelte";
   import GameOverBanner from "./lib/panels/GameOverBanner.svelte";
   import { gameStore } from "./lib/stores/game.svelte.ts";
@@ -50,7 +51,10 @@
   <section class="board-area">
     <Board />
   </section>
-  <HistoryPanel />
+  <aside class="sidebar">
+    <HistoryPanel />
+    <AnalysisPanel />
+  </aside>
 </div>
 <GameOverBanner />
 
@@ -72,5 +76,11 @@
     align-items: center;
     justify-content: center;
     overflow: auto;
+  }
+  .sidebar {
+    display: grid;
+    grid-template-rows: 1fr auto;   /* History flexes, Analysis hugs content */
+    min-height: 0;                  /* allow History to scroll */
+    background: #1a1a1a;
   }
 </style>
