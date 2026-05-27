@@ -11,6 +11,7 @@
   import { enginesStore } from "./lib/stores/engines.svelte.ts";
   import { analysisStore } from "./lib/stores/analysis.svelte.ts";
   import { tauri, type AnalysisInfoEvent, type EngineBestMoveEvent } from "./lib/tauri.ts";
+  import { shouldEnginePlay } from "./lib/stores/auto-play.ts";
 
   let unlistenInfo: UnlistenFn | null = null;
   let unlistenBest: UnlistenFn | null = null;
@@ -19,9 +20,15 @@
     unlistenInfo = await listen<AnalysisInfoEvent>("analysis_info", (e) => {
       analysisStore.applyInfo(e.payload);
     });
-    unlistenBest = await listen<EngineBestMoveEvent>("engine_bestmove", (e) => {
-      // Auto-play wiring lands in Task 10. For now just console-log.
-      console.log("[engine_bestmove]", e.payload);
+    unlistenBest = await listen<EngineBestMoveEvent>("engine_bestmove", async (e) => {
+      const payload = e.payload;
+      if (payload.search_id !== analysisStore.searchId) return; // stale
+      if (!shouldEnginePlay(gameStore.currentFen, enginesStore.white, enginesStore.black)) return;
+      try {
+        await gameStore.makeMove(payload.mv);
+      } catch (err) {
+        console.error("[engine_bestmove] makeMove failed", err);
+      }
     });
   });
 
