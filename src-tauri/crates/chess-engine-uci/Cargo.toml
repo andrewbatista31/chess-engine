@@ -1,0 +1,13 @@
+[package]
+name = "chess-engine-uci"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+chess-core = { path = "../chess-core" }
+chess-engine-api = { path = "../chess-engine-api" }
+tokio = { workspace = true }
+
+[dev-dependencies]
